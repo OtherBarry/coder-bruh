@@ -1,18 +1,14 @@
 """File for primary agent"""
-import random
-from enum import Enum
 
 
-class Action(Enum):
+class Agent:
+    """Class for primary agent"""
+
     UP = "u"
     DOWN = "d"
     LEFT = "l"
     RIGHT = "r"
     BOMB = "b"
-
-
-class Agent:
-    """Class for primary agent"""
 
     def __init__(self):
         self.tick_number = -1
