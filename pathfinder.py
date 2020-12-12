@@ -64,8 +64,8 @@ class agent:
 		global path_progress
 		new_path = self.generate_path(self.location, (1,1))
 		if new_path == path:
-			print("MATCH")
 			if path_progress < len(path):
+				print("MATCH")
 				action = self.move_to_tile(self.location, path[path_progress])
 				path_progress += 1
 				return action
@@ -204,18 +204,14 @@ class agent:
 
 			# Generate children
 			children = []
-			for new_position in [(0, -1), (0, 1), (-1, 0), (1, 0), (-1, -1), (-1, 1), (1, -1),
-								 (1, 1)]:  # Adjacent squares
+			for new_position in [(0, -1), (0, 1), (-1, 0), (1, 0)]:  # Adjacent squares
 
 				# Get node position
 				node_position = (current_node.position[0] + new_position[0], current_node.position[1] + new_position[1])
-				print(node_position)
 				if not self.game_state.is_in_bounds(node_position):
 					continue
-
-				if self.is_obstructed()
-				#	continue FIX
-
+				if self.is_obstructed(node_position):
+					continue
 
 				# Create new node
 				new_node = Node(current_node, node_position)
@@ -244,6 +240,8 @@ class agent:
 
 				# Add the child to the open list
 				open_list.append(child)
+		print("NO PATH")
+		pass
 
 	def is_obstructed(self, location):
 		entity = self.game_state.entity_at(location)
