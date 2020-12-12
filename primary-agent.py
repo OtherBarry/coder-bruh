@@ -53,6 +53,8 @@ class Agent:
         for tile in affected:
             if tile in self.ores:
                 self.ores[tile] -= 1
+                if self.ores[tile] == 0:
+                    del self.ores[tile]
                 #  update other players
                 #  update wooden blocks
 
