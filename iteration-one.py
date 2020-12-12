@@ -127,7 +127,11 @@ class Agent:
         best_tiles = [key for key, value in tiles.items() if value == best_score]
         if location in best_tiles and best_score > 0:
             return self.BOMB
-        best_tiles = [tile for tile in best_tiles if not self.in_bomb_radius(tile, time_remaining=2)]
+        best_tiles = [
+            tile
+            for tile in best_tiles
+            if not self.in_bomb_radius(tile, time_remaining=2)
+        ]
         if best_tiles == []:
             return random.choice([self.UP, self.DOWN, self.LEFT, self.RIGHT])
         return self.move_to_tile(location, random.choice(best_tiles))
