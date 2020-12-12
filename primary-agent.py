@@ -15,14 +15,24 @@ class Agent:
         self.updated = True
         self.action_queue = []
         self.bombs = {}
+        self.ores = {}
+        self.first = True
 
     def next_move(self, game_state, player_state):
         """This method is called each time the player needs to choose an action"""
+        self.game_state = game_state
+        if self.first:
+            self.on_first()
+
         updated = game_state.tick_number != self.tick_number
         self.tick_number = game_state.tick_number
         if not updated:
             return self.action_queue.pop()
         return None
+
+    def on_first(self):
+        self.first = False
+        self.ores = {ore: 3 for ore in self.game_state.ore_blocks}
 
     def track_bombs(self, bombs):
         detonation_tick = self.tick_number - 35
