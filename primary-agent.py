@@ -67,15 +67,23 @@ class Agent:
         return affected
 
     def is_item_here(self, coords):
-        return len(self.game_state.entity_at(coords)) == 2
+        entity = self.game_state.entity_at(coords)
+        return entity is not None and len(entity) == 2 or entity == "b"
 
     def bombing_value(self, x, y):
         points = 0
-        block_name = ""
-        for x_val in range(x - 2, x + 2):
-            block = self.game_state.entity_at((x_val, y))
-            if block_name == "sb":
+        affected = self.bomb_affect((x,y))
+        for entity in affected:
+            if entity == "sb":
                 points = points + 2
-            elif block_name == "ob":
-                return 10  ## ASDF NEED TO TRACK BLOCK HP
-            points = points + self.block_values(block)
+            elif entity == "ob" and : #ON LAST HP
+                
+
+
+        # for x_val in range(x - 2, x + 2):
+        #     block = self.game_state.entity_at((x_val, y))
+        #     if block_name == "sb":
+        #         points = points + 2
+        #     elif block_name == "ob":
+        #         return 10  ## ASDF NEED TO TRACK BLOCK HP
+        #     points = points + self.block_values(block)
