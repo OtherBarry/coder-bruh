@@ -31,14 +31,8 @@ class Agent:
             self.on_first()
 
         self.track_bombs(game_state.bombs)
-        updated = game_state.tick_number != self.tick_number
         self.tick_number = game_state.tick_number
-        # if not updated:
-        #     return ""
-        # if self.in_bomb_radius(player_state.location, time_remaining=2):
-        #     target = self.avoid_bombs(player_state.location)
-        #     if target is not None:
-        #         return self.move_to_tile(player_state.location, target)
+
         return self.find_best_bombing_location(player_state.location)
 
     def on_first(self):
