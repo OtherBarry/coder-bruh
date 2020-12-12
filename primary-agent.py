@@ -24,6 +24,7 @@ class Agent:
         if self.first:
             self.on_first()
 
+        self.track_bombs(game_state.bombs)
         updated = game_state.tick_number != self.tick_number
         self.tick_number = game_state.tick_number
         if not updated:
@@ -36,16 +37,24 @@ class Agent:
 
     def track_bombs(self, bombs):
         detonation_tick = self.tick_number - 35
+        to_delete = []
         for location, tick in self.bombs.items():
             if tick == detonation_tick:
                 self.track_detonation(location)
-                del self.bombs[location]
+                to_delete.append(location)
+        for loc in to_delete:
+            del self.bombs[loc]
         for bomb in bombs:
             if bomb not in self.bombs:
                 self.bombs[bomb] = self.tick_number
 
     def track_detonation(self, location):
-        pass
+        affected = self.bomb_affect(location)
+        for tile in affected:
+            if tile in self.ores:
+                self.ores[tile] -= 1
+                #  update other players
+                #  update wooden blocks
 
     def calculate_distance(self):
         pass
@@ -58,9 +67,9 @@ class Agent:
 
         for i, m in [(0, 1), (0, -1), (1, 1), (1, -1)]:
             for c in range(2):
-                coords = loc
+                coords = list(loc)
                 coords[i] = coords[i] + (c * m)
-                affected.append((coords))
+                affected.append(tuple(coords))
                 if self.is_item_here(coords):
                     break
 
@@ -72,13 +81,12 @@ class Agent:
 
     def bombing_value(self, x, y):
         points = 0
-        affected = self.bomb_affect((x,y))
+        affected = self.bomb_affect((x, y))
         for entity in affected:
             if entity == "sb":
                 points = points + 2
-            elif entity == "ob" and : #ON LAST HP
-                
-
+            elif entity == "ob":  # ON LAST HP
+                pass
 
         # for x_val in range(x - 2, x + 2):
         #     block = self.game_state.entity_at((x_val, y))
