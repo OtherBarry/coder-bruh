@@ -26,17 +26,15 @@ class Agent:
             self.on_first()
 
         self.track_bombs(game_state.bombs)
-        print(self.bombing_value(player_state.location))
         updated = game_state.tick_number != self.tick_number
         self.tick_number = game_state.tick_number
         if not updated:
             return ""
-        valid_tiles = get_surrounding_tiles(player_state.location)
-        empty_tiles = get_empty_tiles(valid_tiles)
-        return move_to_tile(
-            random.choice(empty_tiles)
-        )  # this should now check for valid empty tiles and move to one at random
-        # return random.choice([self.UP, self.DOWN, self.LEFT, self.RIGHT])
+        if self.in_bomb_radius(player_state.location):
+            target = self.avoid_bombs(player_state.location)
+            if target is not None:
+                return self.move_to_tile(player_state.location, target)
+        return ""
 
     def on_first(self):
         self.first = False
@@ -94,10 +92,7 @@ class Agent:
         return False
 
     def avoid_bombs(self, location):
-        for i, c in [(0, 1), (0, -1), (1, 1), (1, -1)]:
-            loc = list(location)
-            loc[i] += c
-            loc = tuple(loc)
+        for loc in self.get_surrounding_tiles(location):
             if not (self.game_state.is_occupied(loc) or self.in_bomb_radius(loc)):
                 return loc
 
@@ -120,18 +115,11 @@ class Agent:
             (location[0] - 1, location[1]),
             (location[0] + 1, location[1]),
         ]
-        valid_tiles = []
-        for tile in surrounding_tiles:
-            if self.game_state.is_in_bounds(tile):
-                valid_tiles.append(tile)
-        return valid_tiles
+        return [tile for tile in surrounding_tiles if self.game_state.is_in_bounds(tile)]
 
     def move_to_tile(self, location, tile):
         """Movement input is calculated based on target tile distance delta"""
-        actions = ["", "u", "d", "l", "r", "p"]
-        # see where the tile is relative to our current location
-        diff = tuple(x - y for x, y in zip(self.location, tile))
-        # return the action that moves in the direction of the tile
+        diff = tuple(x - y for x, y in zip(location, tile))
         if diff == (0, 1):
             action = "d"
         elif diff == (1, 0):
