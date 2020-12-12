@@ -39,3 +39,32 @@ class Agent:
 
     def calculate_distance(self):
         pass
+
+    def go_to(self):
+        pass
+
+    def bomb_affect(self, loc):
+        affected = []
+
+        for i, m in [(0, 1), (0, -1), (1, 1), (1, -1)]:
+            for c in range(2):
+                coords = loc[i] + (c * m)
+                affected.append((coords))
+                if self.is_item_here(coords):
+                    break
+
+        return affected
+
+    def is_item_here(self, coords):
+        return len(self.game_state.entity_at(coords)) == 2
+
+    def bombing_value(self, x, y):
+        points = 0
+        block_name = ""
+        for x_val in range(x - 2, x + 2):
+            block = self.game_state.entity_at((x_val, y))
+            if block_name == "sb":
+                points = points + 2
+            elif block_name == "ob":
+                return 10  ## ASDF NEED TO TRACK BLOCK HP
+            points = points + self.block_values(block)
