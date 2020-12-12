@@ -40,14 +40,10 @@ class agent:
 		###      AGENT       ###
 		########################
 
-		# get our surrounding tiles
 		surrounding_tiles = self.get_surrounding_tiles(self.location)
-
-		# get list of empty tiles around us
 		empty_tiles = self.get_empty_tiles(surrounding_tiles)
-
-		# choose an empty tile to walk to
-		random_tile = random.choice(empty_tiles)
+		tileset = self.prioritise_pickups(empty_tiles)
+		random_tile = random.choice(tileset)
 		if random.uniform(0, 100) < ammo**2:
 			return "b"
 		else:
@@ -101,6 +97,17 @@ class agent:
 				empty_tiles.append(tile)
 
 		return empty_tiles
+
+	def prioritise_pickups(self, tiles):
+
+		pickups = []
+		for tile in tiles:
+			if self.game_state.entity_at(tile) in ["a", "t"]:
+				pickups.append(tile)
+		if len(pickups) == 0:
+			return tiles
+		else:
+			return pickups
 
 	# given an adjacent tile location, move us there
 	def move_to_tile(self, location, tile):
