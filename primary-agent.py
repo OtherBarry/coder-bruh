@@ -79,8 +79,8 @@ class Agent:
         #  update other players
         #  update wooden blocks
 
-    def calculate_distance(self):
-        pass
+    def get_manhattan_distance(self, a, b):
+        return abs(a[0] - b[0]) + abs(a[1] + b[1])
 
     def go_to(self):
         pass
