@@ -1,4 +1,5 @@
 """File for primary agent"""
+import random
 
 
 class Agent:
@@ -25,11 +26,17 @@ class Agent:
             self.on_first()
 
         self.track_bombs(game_state.bombs)
+        print(self.bombing_value(player_state.location))
         updated = game_state.tick_number != self.tick_number
         self.tick_number = game_state.tick_number
         if not updated:
-            return self.action_queue.pop()
-        return None
+            return ""
+        valid_tiles = get_surrounding_tiles(player_state.location)
+        empty_tiles = get_empty_tiles(valid_tiles)
+        return move_to_tile(
+            random.choice(empty_tiles)
+        )  # this should now check for valid empty tiles and move to one at random
+        # return random.choice([self.UP, self.DOWN, self.LEFT, self.RIGHT])
 
     def on_first(self):
         self.first = False
@@ -65,12 +72,12 @@ class Agent:
         pass
 
     def bomb_affect(self, loc):
-        affected = []
+        affected = [loc]
 
         for i, m in [(0, 1), (0, -1), (1, 1), (1, -1)]:
             for c in range(2):
                 coords = list(loc)
-                coords[i] = coords[i] + (c * m)
+                coords[i] = coords[i] + (c * m)  # yee boi
                 affected.append(tuple(coords))
                 if self.is_item_here(coords):
                     break
@@ -78,22 +85,69 @@ class Agent:
         return affected
 
     def is_item_here(self, coords):
-        entity = self.game_state.entity_at(coords)
-        return entity is not None and len(entity) == 2 or entity == "b"
+        return self.game_state.entity_at(coords) in ["b", "ib", "ob", "sb"]
+
+    def in_bomb_radius(self, location):
+        for bomb in self.bombs:
+            if location in self.bomb_affect(bomb):
+                return True
+        return False
+
+    def avoid_bombs(self, location):
+        for i, c in [(0, 1), (0, -1), (1, 1), (1, -1)]:
+            loc = list(location)
+            loc[i] += c
+            loc = tuple(loc)
+            if not (self.game_state.is_occupied(loc) or self.in_bomb_radius(loc)):
+                return loc
 
     def bombing_value(self, loc):
         points = 0
         affected = self.bomb_affect(loc)
-        for entity in affected:
+        for location in affected:
+            entity = self.game_state.entity_at(location)
             if entity == "sb":
                 points = points + 2
-            elif entity == "ob" and : #ON LAST HP
+            elif entity == "ob" and self.ores[location] == 1:  # ON LAST HP
                 points = points + 10
+        return points
 
     def get_surrounding_tiles(self, location):
-        surrounding_tiles = [(location[0], location[1] + 1), (location[0], location[1] - 1), (location[0] - 1, location[1]), (location[0] + 1, location[1])]
+        """Gets a list of surrounding tiles from up, down, left right"""
+        surrounding_tiles = [
+            (location[0], location[1] + 1),
+            (location[0], location[1] - 1),
+            (location[0] - 1, location[1]),
+            (location[0] + 1, location[1]),
+        ]
         valid_tiles = []
         for tile in surrounding_tiles:
             if self.game_state.is_in_bounds(tile):
                 valid_tiles.append(tile)
         return valid_tiles
+
+    def move_to_tile(self, location, tile):
+        """Movement input is calculated based on target tile distance delta"""
+        actions = ["", "u", "d", "l", "r", "p"]
+        # see where the tile is relative to our current location
+        diff = tuple(x - y for x, y in zip(self.location, tile))
+        # return the action that moves in the direction of the tile
+        if diff == (0, 1):
+            action = "d"
+        elif diff == (1, 0):
+            action = "l"
+        elif diff == (0, -1):
+            action = "u"
+        elif diff == (-1, 0):
+            action = "r"
+        else:
+            action = ""
+        return action
+
+    def get_empty_tiles(self, tiles):
+        """Get empty tiles from list of tiles"""
+        empty_tiles = []
+        for tile in tiles:
+            if not self.game_state.is_occupied(tile):
+                empty_tiles.append(tile)
+        return empty_tiles
