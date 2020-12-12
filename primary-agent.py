@@ -48,7 +48,8 @@ class Agent:
 
         for i, m in [(0, 1), (0, -1), (1, 1), (1, -1)]:
             for c in range(2):
-                coords = loc[i] + (c * m)
+                coords = loc
+                coords[i] = coords[i] + (c * m)
                 affected.append((coords))
                 if self.is_item_here(coords):
                     break
