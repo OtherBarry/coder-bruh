@@ -28,12 +28,25 @@ class Agent:
         self.game_state = game_state
         self.player_state = player_state
         if self.first:
-            self.on_first()
+            self.path = self.generate_path(player_state.location, (1, 1))
+            print(self.path)
+            self.first = False
 
-        self.track_bombs(game_state.bombs)
-        self.tick_number = game_state.tick_number
+        if self.path:
+            next_step = self.path[0]
+            self.path = self.path[1:]
+            return self.move_to_tile(player_state.location, next_step)
+        return ""
+        #     self.on_first()
+        #
+        # self.track_bombs(game_state.bombs)
+        # self.tick_number = game_state.tick_number
+        #
+        # return self.find_best_bombing_location(player_state.location)
 
-        return self.find_best_bombing_location(player_state.location)
+    def is_moveable_to(self, location):
+        entity = self.game_state.entity_at(location)
+        return entity not in ["b", "ib", "ob", "sb", "0", "1"]
 
     def on_first(self):
         self.first = False
@@ -73,10 +86,8 @@ class Agent:
         pass
 
     def bomb_affect(self, loc):
-
         x = 0
         y = 1
-
         pos = 1
         neg = -1
 
@@ -92,10 +103,6 @@ class Agent:
                         if self.game_state.entity_at(coords) in ["b", "ib", "ob", "sb"]:
                             break
         return affected
-
-    def is_moveable_to(self, location):
-        entity = self.game_state.entity_at(location)
-        return entity in ["b", "ib", "ob", "sb", "0", "1"]
 
     def in_bomb_radius(self, location, time_remaining=None):
         for bomb in self.bombs.keys():
@@ -114,14 +121,18 @@ class Agent:
     def find_best_bombing_location(self, location):
         tiles = {}
         for tile in self.get_surrounding_tiles(location):
-            if not self.is_moveable_to(tile):
+            if self.is_moveable_to(tile):
                 tiles[tile] = self.bombing_value(tile)
         tiles[location] = self.bombing_value(location)
         best_score = max(tiles.values())
         best_tiles = [key for key, value in tiles.items() if value == best_score]
         if location in best_tiles and best_score > 0:
             return self.BOMB
-        best_tiles = [tile for tile in best_tiles if not self.in_bomb_radius(tile, time_remaining=2)]
+        best_tiles = [
+            tile
+            for tile in best_tiles
+            if not self.in_bomb_radius(tile, time_remaining=2)
+        ]
         if best_tiles == []:
             return random.choice([self.UP, self.DOWN, self.LEFT, self.RIGHT])
         return self.move_to_tile(location, random.choice(best_tiles))
@@ -144,9 +155,6 @@ class Agent:
             for location in affected:
                 entity = self.game_state.entity_at(location)
                 if self.in_bomb_radius(location):
-                    print(loc)
-                    print("in radiius in bomb_value")
-                    print(affected)
                     continue
                 if entity == "sb":
                     points += 2
@@ -190,3 +198,69 @@ class Agent:
             if not self.game_state.is_occupied(tile):
                 empty_tiles.append(tile)
         return empty_tiles
+
+    def generate_path(self, location, target):
+        start_node = Node(None, location)
+        start_node.g = start_node.h = start_node.f = 0
+        end_node = Node(None, target)
+        end_node.g = end_node.h = end_node.f = 0
+        open_list = []
+        closed_list = []
+        open_list.append(start_node)
+        iter_count = 0
+        while iter_count < 100 and len(open_list) > 0:
+            iter_count += 1
+            current_node = open_list[0]
+            current_index = 0
+            for index, item in enumerate(open_list):
+                if item.f < current_node.f:
+                    current_node = item
+                    current_index = index
+            open_list.pop(current_index)
+            closed_list.append(current_node)
+
+            if current_node == end_node:
+                path = []
+                current = current_node
+                while current is not None:
+                    path.append(current.position)
+                    current = current.parent
+                path = path[::-1]
+                return path[1:]  # Return reversed path
+
+            children = []
+            for node_position in self.get_surrounding_tiles(current_node.position):
+                if not self.is_moveable_to(node_position):
+                    continue
+                new_node = Node(current_node, node_position)
+                children.append(new_node)
+
+            for child in children:
+                for closed_child in closed_list:
+                    if child == closed_child:
+                        continue
+                child.g = current_node.g + 1
+                child.h = ((child.position[0] - end_node.position[0]) ** 2) + (
+                    (child.position[1] - end_node.position[1]) ** 2
+                )
+                child.f = child.g + child.h
+                for open_node in open_list:
+                    if child == open_node and child.g > open_node.g:
+                        continue
+                open_list.append(child)
+        print("Computation cap exceeded")
+        return None
+
+
+class Node:
+    """A node class for A* Pathfinding"""
+
+    def __init__(self, parent=None, position=None):
+        self.parent = parent
+        self.position = position
+        self.g = 0
+        self.h = 0
+        self.f = 0
+
+    def __eq__(self, other):
+        return self.position == other.position
