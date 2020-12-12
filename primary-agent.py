@@ -89,3 +89,11 @@ class Agent:
                 points = points + 2
             elif entity == "ob" and : #ON LAST HP
                 points = points + 10
+
+    def get_surrounding_tiles(self, location):
+        surrounding_tiles = [(location[0], location[1] + 1), (location[0], location[1] - 1), (location[0] - 1, location[1]), (location[0] + 1, location[1])]
+        valid_tiles = []
+        for tile in surrounding_tiles:
+            if self.game_state.is_in_bounds(tile):
+                valid_tiles.append(tile)
+        return valid_tiles
