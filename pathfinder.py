@@ -213,7 +213,7 @@ class agent:
 				if not self.game_state.is_in_bounds(node_position):
 					continue
 
-				#if self.game_state.is_occupied(node_position) or self.game_state.entity_at(node_position) in ["a", "t"]: #player vardfkfdslkajfas
+				if self.is_obstructed()
 				#	continue FIX
 
 
@@ -244,3 +244,7 @@ class agent:
 
 				# Add the child to the open list
 				open_list.append(child)
+
+	def is_obstructed(self, location):
+		entity = self.game_state.entity_at(location)
+		return entity in ["b", "ib", "ob", "sb", "0", "1"]
