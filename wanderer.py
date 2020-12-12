@@ -96,7 +96,7 @@ class agent:
 		empty_tiles = []
 
 		for tile in tiles:
-			if not self.game_state.is_occupied(tile):
+			if not self.game_state.is_occupied(tile) or self.game_state.entity_at(tile) in ["a", "t"]:
 				# the tile isn't occupied, so we'll add it to the list
 				empty_tiles.append(tile)
 
