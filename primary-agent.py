@@ -1,5 +1,6 @@
 """File for primary agent"""
 import random
+from timeit import default_timer as timer
 
 
 class Agent:
@@ -15,6 +16,11 @@ class Agent:
     MAX_AMMO_WEIGHTING = 5
     MIN_AMMO_WEIGHTING = 1
 
+    UNEWIGHTED_DISTANCE = 2
+    DISTANCE_DEBUFF = 1 / 20
+
+    WAITING_BLOCKS = [(5, 5), (5, 4), (6, 5), (6, 4)]
+
     def __init__(self):
         self.tick_number = -1
         self.updated = True
@@ -22,31 +28,42 @@ class Agent:
         self.bombs = {}
         self.ores = {}
         self.first = True
+        self.target = None
+        self.path = None
+        self.late_game = False
+        self.player_location = (-1, -1)
+        self.last_move = self.DO_NOTHING
 
     def next_move(self, game_state, player_state):
         """This method is called each time the player needs to choose an action"""
+
         self.game_state = game_state
         self.player_state = player_state
-        if self.first:
-            self.path = self.generate_path(player_state.location, (1, 1))
-            print(self.path)
-            self.first = False
 
-        if self.path:
-            next_step = self.path[0]
-            self.path = self.path[1:]
-            return self.move_to_tile(player_state.location, next_step)
-        return ""
-        #     self.on_first()
-        #
-        # self.track_bombs(game_state.bombs)
-        # self.tick_number = game_state.tick_number
-        #
-        # return self.find_best_bombing_location(player_state.location)
+        self.late_game = len(self.game_state.soft_blocks) == 0
+
+        if self.first:
+            self.on_first()
+            self.player_location = player_state.location
+            self.id = player_state.id
+
+        self.track_bombs(game_state.bombs)
+
+        worth_attempting = self.get_locations_worth_attempting()
+        path = self.get_path_to_best(worth_attempting)
+        entity_at_current_loc = game_state.entity_at(self.player_location)
+        if entity_at_current_loc == self.id or (
+            self.last_move == self.BOMB and entity_at_current_loc == "b"
+        ):
+            self.tick_number = game_state.tick_number
+            self.last_move = self.get_action_from_path(path)
+            return self.last_move
+        else:
+            print("Desync: ", entity_at_current_loc)
 
     def is_moveable_to(self, location):
         entity = self.game_state.entity_at(location)
-        return entity not in ["b", "ib", "ob", "sb", "0", "1"]
+        return entity not in ["b", "ib", "ob", "sb", int(self.player_state.id == 0)]
 
     def on_first(self):
         self.first = False
@@ -82,9 +99,6 @@ class Agent:
     def get_manhattan_distance(self, a, b):
         return abs(a[0] - b[0]) + abs(a[1] + b[1])
 
-    def go_to(self):
-        pass
-
     def bomb_affect(self, loc):
         x = 0
         y = 1
@@ -118,25 +132,6 @@ class Agent:
             if not (self.game_state.is_occupied(loc) or self.in_bomb_radius(loc)):
                 return loc
 
-    def find_best_bombing_location(self, location):
-        tiles = {}
-        for tile in self.get_surrounding_tiles(location):
-            if self.is_moveable_to(tile):
-                tiles[tile] = self.bombing_value(tile)
-        tiles[location] = self.bombing_value(location)
-        best_score = max(tiles.values())
-        best_tiles = [key for key, value in tiles.items() if value == best_score]
-        if location in best_tiles and best_score > 0:
-            return self.BOMB
-        best_tiles = [
-            tile
-            for tile in best_tiles
-            if not self.in_bomb_radius(tile, time_remaining=2)
-        ]
-        if best_tiles == []:
-            return random.choice([self.UP, self.DOWN, self.LEFT, self.RIGHT])
-        return self.move_to_tile(location, random.choice(best_tiles))
-
     def bombing_value(self, loc):
         points = 0
 
@@ -154,13 +149,16 @@ class Agent:
             affected.pop(0)
             for location in affected:
                 entity = self.game_state.entity_at(location)
+                if entity == "ob" and (
+                    (self.late_game and self.player_state.ammo >= self.ores[location])
+                    or ((not self.late_game) and self.ores[location] == 1)
+                ):
+                    points += 10
+                    continue
                 if self.in_bomb_radius(location):
                     continue
                 if entity == "sb":
                     points += 2
-                    continue
-                if entity == "ob" and self.ores[location] == 1:
-                    points += 10
 
         return points
 
@@ -176,9 +174,9 @@ class Agent:
             tile for tile in surrounding_tiles if self.game_state.is_in_bounds(tile)
         ]
 
-    def move_to_tile(self, location, tile):
+    def move_to_tile(self, current_location, destination):
         """Movement input is calculated based on target tile distance delta"""
-        diff = tuple(x - y for x, y in zip(location, tile))
+        diff = tuple(x - y for x, y in zip(current_location, destination))
         if diff == (0, 1):
             action = self.DOWN
         elif diff == (1, 0):
@@ -188,18 +186,77 @@ class Agent:
         elif diff == (-1, 0):
             action = self.RIGHT
         else:
+            print("Failed to move to tile (tiles provided are not neighbours")
             action = self.DO_NOTHING
+
+        if action != self.DO_NOTHING:
+            self.player_location = destination
+
+        # print("From {} to {} by {}".format(current_location, destination, action))
         return action
 
-    def get_empty_tiles(self, tiles):
-        """Get empty tiles from list of tiles"""
-        empty_tiles = []
-        for tile in tiles:
-            if not self.game_state.is_occupied(tile):
-                empty_tiles.append(tile)
-        return empty_tiles
+    def get_locations_worth_attempting(self):
+        x_bound, y_bound = self.game_state.size
+        valid_coords = []
+        for x in range(x_bound):
+            for y in range(y_bound):
+                valid_coords.append((x, y))
 
-    def generate_path(self, location, target):
+        worth_attempting = {}
+        for coords in valid_coords:
+            if self.is_moveable_to(coords):
+                value = self.bombing_value(coords)
+                if value > 0:
+                    if value in worth_attempting:
+                        worth_attempting[value].append(coords)
+                    else:
+                        worth_attempting[value] = [coords]
+
+        return worth_attempting
+
+    def get_path_to_best(self, worth_attempting):
+        current_location = self.player_state.location
+        values = sorted(worth_attempting.keys(), reverse=True)
+        print(worth_attempting)
+        for value in values:
+            paths = []
+            for coords in worth_attempting[value]:
+                if current_location == coords:
+                    return []
+                path = self.generate_path(current_location, coords)
+                if path is not None:
+                    paths.append((coords, path))
+            if paths:
+                best = min(paths, key=lambda x: len(x[1]))
+                print(best[1])
+                return best[1]
+        return self.get_path_to_centre()
+
+    def get_path_to_centre(self):
+        current_location = self.player_state.location
+        if current_location in self.WAITING_BLOCKS:
+            return []
+        for tile in self.WAITING_BLOCKS:
+            path = self.generate_path(current_location, tile)
+            if path is not None:
+
+                return path
+        return []
+
+    def get_action_from_path(self, path):
+        current_location = self.player_state.location
+        if path == []:
+            bombing_value = self.bombing_value(current_location)
+            if self.player_state.ammo > 0 and bombing_value > 0:
+                print("Planting Bomb for {} points".format(bombing_value))
+                return self.BOMB
+            else:
+                print("Doing Nothing")
+                return self.DO_NOTHING
+        else:
+            return self.move_to_tile(current_location, path[0])
+
+    def generate_path(self, location, target, max_count=200):
         start_node = Node(None, location)
         start_node.g = start_node.h = start_node.f = 0
         end_node = Node(None, target)
@@ -208,7 +265,7 @@ class Agent:
         closed_list = []
         open_list.append(start_node)
         iter_count = 0
-        while iter_count < 100 and len(open_list) > 0:
+        while iter_count < max_count and len(open_list) > 0:
             iter_count += 1
             current_node = open_list[0]
             current_index = 0
@@ -248,7 +305,7 @@ class Agent:
                     if child == open_node and child.g > open_node.g:
                         continue
                 open_list.append(child)
-        print("Computation cap exceeded")
+        # print("Unable to move from {} to {} after {} iterations".format(location, target, max_count))
         return None
 
 
