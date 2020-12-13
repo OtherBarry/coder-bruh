@@ -154,9 +154,6 @@ class Agent:
             for location in affected:
                 entity = self.game_state.entity_at(location)
                 if self.in_bomb_radius(location):
-                    print(loc)
-                    print("in radiius in bomb_value")
-                    print(affected)
                     continue
                 if entity == "sb":
                     points += 2
