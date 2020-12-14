@@ -61,7 +61,6 @@ class Agent:
             return self.DO_NOTHING
 
         if location == prime_target[0] and self.bombing_value(location) > 1:
-            print("Allahu Akbar! " * self.bombing_value(location))
             return self.BOMB
 
         if self.target is None:
@@ -85,16 +84,13 @@ class Agent:
         self.path = self.get_best_path(ranked_targets)
         if not self.path:
             self.target = None
-            print("Unable to make a path to any available tiles")
             return self.DO_NOTHING
         else:
             self.target = self.path[-1]
             return self.move_along_path()
 
     def get_best_path(self, ranked_targets):
-        print("Possible Targets: ", len(ranked_targets))
         for target in ranked_targets:
-            print("Target Value:", target[1])
             if target[1] <= 0:
                 return None
             if target == self.player_state.location:
@@ -105,7 +101,6 @@ class Agent:
                 target[0],
                 max_count=max((2 * target[2]) ** 2, 25),
             )
-            print("tried pathing to ", target[0])
             if path is None:
                 continue
             return path
@@ -115,11 +110,6 @@ class Agent:
         next_move = self.path.pop(0)
         move = self.move_to_tile(self.player_state.location, next_move)
         if move == self.DO_NOTHING:
-            print(
-                "Unable to move from {} to {}".format(
-                    self.player_state.location, next_move
-                )
-            )
             self.target = None
             self.path = None
         return move
@@ -344,11 +334,6 @@ class Agent:
                     if child == open_node and child.g > open_node.g:
                         continue
                 open_list.append(child)
-        print(
-            "Unable to move from {} to {} after {} iterations".format(
-                location, target, max_count
-            )
-        )
         return None
 
 

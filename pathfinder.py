@@ -58,14 +58,12 @@ class agent:
         ###      AGENT       ###
         ########################
         ammo_deposits = self.game_state.ammo
-        # print(ammo_deposits)
         # if len(ammo_deposits) != 0:
         global path
         global path_progress
         new_path = self.generate_path(self.location, (1, 1))
         if new_path == path:
             if path_progress < len(path):
-                print("MATCH")
                 action = self.move_to_tile(self.location, path[path_progress])
                 path_progress += 1
                 return action
@@ -74,7 +72,6 @@ class agent:
         else:
             path = new_path
             path_progress = 0
-        print(path)
 
         # surrounding_tiles = self.get_surrounding_tiles(self.location)
         # empty_tiles = self.get_empty_tiles(surrounding_tiles)
@@ -245,7 +242,6 @@ class agent:
 
                 # Add the child to the open list
                 open_list.append(child)
-        print("NO PATH")
         pass
 
     def is_obstructed(self, location):

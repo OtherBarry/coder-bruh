@@ -54,7 +54,6 @@ class Agent:
             self.on_first()
             self.player_location = player_state.location
 
-
         if self.desync_count > self.MAX_DESYNC:
             self.player_location = player_state.location
             entity_at_current_loc = game_state.entity_at(player_state.location)
@@ -75,7 +74,6 @@ class Agent:
             return self.last_move
         else:
             self.desync_count += 1
-            print("Desync: ", self.desync_count, entity_at_current_loc, self.player_location, player_state.location)
 
     def is_moveable_to(self, location):
         entity = self.game_state.entity_at(location)
@@ -115,7 +113,6 @@ class Agent:
                         self.ores[tile] += 1
 
     def on_bomb_detonate(self, location):
-        print("BOOM")
         to_delete = []
         affected = self.bomb_affect(location)
         affected.remove(location)
@@ -141,7 +138,11 @@ class Agent:
                     coords[axis] += distance * direction
                     coords = tuple(coords)
                     if self.game_state.is_in_bounds(coords):
-                        if limit_ores and distance > 1 and self.game_state.entity_at(coords) == "ob":
+                        if (
+                            limit_ores
+                            and distance > 1
+                            and self.game_state.entity_at(coords) == "ob"
+                        ):
                             break
                         affected.append(coords)
                         if self.game_state.entity_at(coords) in ["b", "ib", "ob", "sb"]:
@@ -218,12 +219,10 @@ class Agent:
         elif diff == (-1, 0):
             action = self.RIGHT
         else:
-            print("Failed to move to tile (tiles provided are not neighbours")
             action = self.DO_NOTHING
 
         if action != self.DO_NOTHING:
             if self.in_bomb_radius(destination, time_remaining=3):
-                print("Avoiding Bomb, Waiting one turn", self.bombs)
                 action = self.DO_NOTHING
             else:
                 self.player_location = destination
@@ -257,7 +256,9 @@ class Agent:
                 if current_location == coords:
                     return []
                 distance = self.get_manhattan_distance(coords, current_location)
-                path = self.generate_path(current_location, coords, max_count=10 + distance ** 2)
+                path = self.generate_path(
+                    current_location, coords, max_count=10 + distance ** 2
+                )
                 if path is not None:
                     paths.append((coords, path))
             if paths:
@@ -281,10 +282,8 @@ class Agent:
         if path == []:
             bombing_value = self.bombing_value(current_location)
             if self.player_state.ammo > 0 and bombing_value > 0:
-                print("Planting Bomb for {} points".format(bombing_value))
                 return self.BOMB
             else:
-                print("Doing Nothing")
                 return self.DO_NOTHING
         else:
             return self.move_to_tile(current_location, path[0])
@@ -338,7 +337,6 @@ class Agent:
                     if child == open_node and child.g > open_node.g:
                         continue
                 open_list.append(child)
-        # print("Unable to move from {} to {} after {} iterations".format(location, target, max_count))
         return None
 
 
