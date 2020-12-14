@@ -1,5 +1,6 @@
 """File for primary agent"""
 from coderone.dungeon.agent import PlayerState, GameState
+import cProfile
 
 
 class Agent:
@@ -15,8 +16,7 @@ class Agent:
     MAX_AMMO_WEIGHTING = 5
     MIN_AMMO_WEIGHTING = 1
 
-    UNEWIGHTED_DISTANCE = 2
-    DISTANCE_DEBUFF = 1 / 20
+    PATHFINDING_HEURISTIC = 2
 
     WAITING_BLOCKS = [(5, 5), (5, 4), (6, 5), (6, 4)]
 
@@ -26,6 +26,8 @@ class Agent:
     OPENING = "o"
     MIDDLE = "m"
     END = "e"
+
+    IMPENETRABLE_OBJECTS = set(["b", "ib", "ob", "sb"])
 
     def __init__(self):
         self.tick_number = -1
@@ -40,10 +42,16 @@ class Agent:
         self.block_counter = [0, 0]
         self.game_stage = self.OPENING
         self.missed_turns = 0
+        self.x_bound = 11
+        self.y_bound = 9
+        self.enemy_id = -1
+
+    # def next_move(self, game_state, player_state):
+    #     cProfile.runctx('self.next_move_alt(g, p)', {'g': game_state, 'p': player_state, 'self': self}, {}, 'out.pstat')
+    #     quit()
 
     def next_move(self, game_state: GameState, player_state: PlayerState):
         """This method is called each time the player needs to choose an action"""
-
         self.game_state = game_state
         self.player_state = player_state
 
@@ -91,10 +99,11 @@ class Agent:
 
     def is_moveable_to(self, location):
         entity = self.game_state.entity_at(location)
-        return entity not in ["b", "ib", "ob", "sb", int(self.player_state.id == 0)]
+        return entity not in self.IMPENETRABLE_OBJECTS and entity != self.enemy_id
 
     def on_first(self):
         self.first = False
+        self.enemy_id = int(self.player_state.id == 0)
         self.ores = {ore: 3 for ore in self.game_state.ore_blocks}
 
     def update_game_stage(self):
@@ -149,24 +158,28 @@ class Agent:
         return abs(a[0] - b[0]) + abs(a[1] + b[1])
 
     def bomb_affect(self, loc):
-        x = 0
-        y = 1
-        pos = 1
-        neg = -1
-
         affected = [loc]
-        for axis in [x, y]:
-            for direction in [neg, pos]:
-                for distance in [1, 2]:
-                    coords = list(loc)
-                    coords[axis] += distance * direction
-                    coords = tuple(coords)
-                    if self.game_state.is_in_bounds(coords):
-                        if distance > 1 and self.game_state.entity_at(coords) == "ob":
-                            break
-                        affected.append(coords)
-                        if self.game_state.entity_at(coords) in ["b", "ib", "ob", "sb"]:
-                            break
+        for axis in (0, 1):
+            for direction in (-1, 1):
+                for distance in (1, 2):
+                    if axis == 0:
+                        new_value = loc[0] + (distance * direction)
+                        if 0 <= new_value <= self.x_bound:
+                            coords = (new_value, loc[1])
+                        else:
+                            continue
+                    else:
+                        new_value = loc[1] + (distance * direction)
+                        if 0 <= new_value <= self.x_bound:
+                            coords = (loc[0], new_value)
+                        else:
+                            continue
+                    entity = self.game_state.entity_at(coords)
+                    if distance > 1 and entity == "ob":
+                        break
+                    affected.append(coords)
+                    if entity in self.IMPENETRABLE_OBJECTS:
+                        break
         return affected
 
     def in_bomb_radius(self, location, time_remaining=None):
@@ -195,7 +208,7 @@ class Agent:
             affected = self.bomb_affect(loc)
             affected.pop(0)
             for location in affected:
-                if location in self.get_surrounding_tiles(loc):
+                if location in self.get_surrounding_tiles(loc):  # This is inefficiten
                     diff = tuple((x - y) * -1 for x, y in zip(loc, location))
                     if (loc[0] + diff[0], loc[1] + diff[1]) in self.bombs:
                         continue
@@ -209,7 +222,7 @@ class Agent:
                     or (self.game_stage == self.OPENING and self.ores[location] == 1)
                 ):
                     points += 10 / self.ores[location]
-                elif self.game_stage == self.END and entity == int(self.player_state.id == 0):
+                elif self.game_stage == self.END and entity == self.enemy_id:
                     points += 0.5
                 elif self.in_bomb_radius(location):
                     continue
@@ -221,15 +234,16 @@ class Agent:
 
     def get_surrounding_tiles(self, location):
         """Gets a list of surrounding tiles from up, down, left right"""
-        surrounding_tiles = [
-            (location[0], location[1] + 1),
-            (location[0], location[1] - 1),
-            (location[0] - 1, location[1]),
-            (location[0] + 1, location[1]),
-        ]
-        return [
-            tile for tile in surrounding_tiles if self.game_state.is_in_bounds(tile)
-        ]
+        surrounding_tiles = []
+        if location[0] != 0:
+            surrounding_tiles.append((location[0] - 1, location[1]))
+        if location[0] != self.x_bound:
+            surrounding_tiles.append((location[0] + 1, location[1]))
+        if location[1] != 0:
+            surrounding_tiles.append((location[0], location[1] - 1))
+        if location[1] != self.y_bound:
+            surrounding_tiles.append((location[0], location[1] + 1))
+        return surrounding_tiles
 
     def move_to_tile(self, current_location, destination):
         """Movement input is calculated based on target tile distance delta"""
@@ -275,23 +289,27 @@ class Agent:
     def get_path_to_best(self, worth_attempting):
         current_location = self.player_location
         values = sorted(worth_attempting.keys(), reverse=True)
+        paths_tried = 0
         for value in values:
             targets = worth_attempting[value]
             paths = []
             if self.target in targets:
                 return self.path
-            for coords in targets:
+            for i, target in enumerate(targets):
+               targets[i] = (self.get_manhattan_distance(target, current_location), target)
+            targets.sort(key=lambda x: x[0])
+            for target in targets:
+                coords = target[1]
                 if current_location == coords:
                     return []
-                distance = self.get_manhattan_distance(coords, current_location)
+                distance = target[0]
                 path = self.generate_path(
                     current_location, coords, max_count=10 + distance ** 2
                 )
+                paths_tried += 1
                 if path is not None:
-                    paths.append((coords, path))
-            if paths:
-                best = min(paths, key=lambda x: len(x[1]))
-                return best[1]
+                    print("Paths tried:", paths_tried)
+                    return path
         return self.get_path_to_centre()
 
     def get_path_to_centre(self):
@@ -334,19 +352,14 @@ class Agent:
         end_node = Node(None, target)
         end_node.g = end_node.h = end_node.f = 0
         open_list = []
-        closed_list = []
+        closed_list = set()
         open_list.append(start_node)
         iter_count = 0
         while iter_count < max_count and len(open_list) > 0:
             iter_count += 1
-            current_node = open_list[0]
-            current_index = 0
-            for index, item in enumerate(open_list):
-                if item.f < current_node.f:
-                    current_node = item
-                    current_index = index
-            open_list.pop(current_index)
-            closed_list.append(current_node)
+            current_node = min(open_list, key=lambda x: x.f)
+            open_list.remove(current_node)
+            closed_list.add(current_node)
 
             if current_node == end_node:
                 path = []
@@ -357,28 +370,21 @@ class Agent:
                 path.pop()
                 return path
 
-            children = []
-            for node_position in self.get_surrounding_tiles(current_node.position):
-                if not self.is_moveable_to(node_position):
-                    continue
-                new_node = Node(current_node, node_position)
-                children.append(new_node)
-
-            for child in children:
-                for closed_child in closed_list:
-                    if child == closed_child:
-                        continue
-                child.g = current_node.g + 1
-                child.h = ((child.position[0] - end_node.position[0]) ** 2) + (
-                    (child.position[1] - end_node.position[1]) ** 2
-                )
-                child.f = child.g + child.h
-                for open_node in open_list:
-                    if child == open_node and child.g > open_node.g:
-                        continue
-                open_list.append(child)
+            for tile in self.get_surrounding_tiles(current_node.position):
+                if self.is_moveable_to(tile):
+                    node = Node(None, tile)
+                    if node not in closed_list:
+                        node.parent = current_node
+                        node.g = current_node.g + 1
+                        node.h = self.get_manhattan_distance(node.position, current_node.position) * self.PATHFINDING_HEURISTIC
+                        node.f = node.g + node.h
+                        for open_node in open_list:
+                            if node == open_node and node.f > open_node.f:
+                                continue
+                        open_list.append(node)
         # print("Unable to move from {} to {} after {} iterations".format(location, target, max_count))
         return None
+
 
 
 class Node:
@@ -393,3 +399,6 @@ class Node:
 
     def __eq__(self, other):
         return self.position == other.position
+
+    def __hash__(self):
+        return hash(self.position)
