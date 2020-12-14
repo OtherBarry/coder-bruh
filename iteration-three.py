@@ -82,7 +82,6 @@ class Agent:
         else:
             self.desync_count += 1
             self.missed_turns += 1
-            print("missed {} out of {} turns ({:.2f}%)".format(self.missed_turns, self.tick_number, (self.missed_turns / self.tick_number) * 100))
 
 
     def make_move(self, move):
@@ -111,7 +110,6 @@ class Agent:
         elif self.block_counter[1] <= self.tick_number - 49:
             next_stage = self.MIDDLE
         if next_stage != self.game_stage:
-            print("Moving to new stage:", next_stage)
             self.game_stage = next_stage
 
     def track_bombs(self, bombs):
@@ -243,7 +241,6 @@ class Agent:
         elif diff == (-1, 0):
             action = self.RIGHT
         else:
-            print("Failed to move to tile (tiles provided are not neighbours")
             action = self.DO_NOTHING
             if destination in self.path:
                 self.target = None
@@ -315,7 +312,6 @@ class Agent:
         else:
             target = self.path.pop()
             if self.in_bomb_radius(target, time_remaining=3):
-                print("Avoiding Bomb, Waiting one turn")
                 return self.make_move(self.DO_NOTHING)
             return self.move_to_tile(self.player_location, target)
 
@@ -377,7 +373,6 @@ class Agent:
                     if child == open_node and child.g > open_node.g:
                         continue
                 open_list.append(child)
-        # print("Unable to move from {} to {} after {} iterations".format(location, target, max_count))
         return None
 
 
