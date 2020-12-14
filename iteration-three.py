@@ -21,7 +21,7 @@ class Agent:
     WAITING_BLOCKS = [(5, 5), (5, 4), (6, 5), (6, 4)]
 
     MAX_DESYNC = 2
-    STATIONARY_HISTORY = [''] * MAX_DESYNC
+    STATIONARY_HISTORY = [""] * MAX_DESYNC
 
     OPENING = "o"
     MIDDLE = "m"
@@ -57,11 +57,14 @@ class Agent:
         else:
             entity_at_current_loc = game_state.entity_at(self.player_location)
 
-        recent_history = self.move_history[-min(self.MAX_DESYNC, len(self.move_history)) :]
+        recent_history = self.move_history[
+            -min(self.MAX_DESYNC, len(self.move_history)) :
+        ]
         self.synced = entity_at_current_loc == player_state.id or (
             entity_at_current_loc == "b"
-            and (self.BOMB
-            in recent_history or recent_history == self.STATIONARY_HISTORY)
+            and (
+                self.BOMB in recent_history or recent_history == self.STATIONARY_HISTORY
+            )
         )
 
         self.tick_number = game_state.tick_number
@@ -69,7 +72,9 @@ class Agent:
 
         if self.synced:
             self.desync_count = 0
-            if self.in_bomb_radius(self.player_location, time_remaining=self.MAX_DESYNC + 3):
+            if self.in_bomb_radius(
+                self.player_location, time_remaining=self.MAX_DESYNC + 3
+            ):
                 return self.avoid_bombs_and_traps()
             self.update_game_stage()
             worth_attempting = self.get_locations_worth_attempting()
@@ -82,7 +87,6 @@ class Agent:
         else:
             self.desync_count += 1
             self.missed_turns += 1
-
 
     def make_move(self, move):
         self.move_history.append(move)
@@ -207,13 +211,14 @@ class Agent:
                     or (self.game_stage == self.OPENING and self.ores[location] == 1)
                 ):
                     points += 10 / self.ores[location]
-                elif self.game_stage == self.END and entity == int(self.player_state.id == 0):
+                elif self.game_stage == self.END and entity == int(
+                    self.player_state.id == 0
+                ):
                     points += 0.5
                 elif self.in_bomb_radius(location):
                     continue
                 elif entity == "sb":
                     points += 2
-
 
         return points
 
@@ -304,7 +309,9 @@ class Agent:
 
     def get_action_from_path(self):
         if self.path == []:
-            bombing_value = self.bombing_value(self.player_location, inculde_pickups=False)
+            bombing_value = self.bombing_value(
+                self.player_location, inculde_pickups=False
+            )
             if self.synced and self.player_state.ammo > 0 and bombing_value > 0:
                 return self.make_move(self.BOMB)
             else:
