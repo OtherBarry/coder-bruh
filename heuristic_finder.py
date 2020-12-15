@@ -60,30 +60,19 @@ class Agent:
         if self.first:
             self.on_first()
 
-        if self.tick_number != game_state.tick_number:
-            self.synced = False
-        else:
-            self.synced = True
+        self.tick_number = game_state.tick_number
+        self.player_location = player_state.location
 
         self.track_bombs(game_state.bombs)
 
-        if self.desync_count > self.MAX_DESYNC:
-            self.tick_number = game_state.tick_number + 1
-            self.player_location = player_state.location
-
-        if self.synced:
-            self.desync_count = 0
-            with open("out_two.txt", "a") as f:
-                self.file = f
-                locations = self.get_locations_worth_attempting()
-                for key in locations:
-                    for target in locations[key]:
-                        path = self.generate_path(self.player_location, target, max_count=400)
-
-            self.tick_number += 1
-        else:
-            self.desync_count += 1
-            self.tick_number += 1
+        with open("out_two.txt", "a") as f:
+            self.file = f
+            locations = self.get_locations_worth_attempting()
+            for key in locations:
+                for target in locations[key]:
+                    path = self.generate_path(
+                        self.player_location, target, max_count=400
+                    )
 
     def make_move(self, move):
         if not self.check_move_valid(self.player_location, move):
@@ -172,7 +161,7 @@ class Agent:
                 self.bombs[tile] = self.bombs[location]
 
     def get_manhattan_distance(self, a, b):  # TODO: Make global
-        return abs(a[0] - b[0]) + abs(a[1] + b[1])
+        return abs(a[0] - b[0]) + abs(a[1] - b[1])
 
     def bomb_affect(self, loc):
         affected = []
@@ -201,11 +190,17 @@ class Agent:
 
     def in_bomb_radius(self, location, time_remaining=None):
         if location in self.bombs:
-            if time_remaining is None or self.tick_number - self.bombs[location] > 35 - time_remaining:
+            if (
+                time_remaining is None
+                or self.tick_number - self.bombs[location] > 35 - time_remaining
+            ):
                 return True
         for bomb in self.bombs.keys():
             if location in self.bomb_affect(bomb):
-                if time_remaining is None or self.tick_number - self.bombs[bomb] > 35 - time_remaining:
+                if (
+                    time_remaining is None
+                    or self.tick_number - self.bombs[bomb] > 35 - time_remaining
+                ):
                     return True
         return False
 
@@ -415,9 +410,19 @@ class Agent:
                     current = current.parent
                 path.pop()
                 distance = self.get_manhattan_distance(location, target)
-                if distance >= len(path):
-                    out = "{}|{}|{}".format(distance, len(path), iter_count)
+                path_len = len(path)
+                if path_len >= distance:
+                    out = "{}|{}|{}".format(distance, path_len, iter_count)
                     self.file.write(out + "\n")
+                else:
+                    print(
+                        "path len off by",
+                        distance - path_len,
+                        location,
+                        target,
+                        distance,
+                        path_len,
+                    )
                 return path
 
             tiles = self.get_surrounding_tiles(current_node.position)
