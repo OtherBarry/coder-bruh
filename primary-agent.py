@@ -22,8 +22,8 @@ class Agent:
     MAX_AMMO_WEIGHTING = {OPENING: 3, MIDDLE: 5, END: 7}
     MIN_AMMO_WEIGHTING = 1
 
-    PATH_H_MULTIPLIER = 10
-    PATH_MIN_H = 1
+    PATHFINDER_HEURISTIC = 7
+    PATHFINDER_ITERATION_MULTIPLIER = 4.6
 
     WAITING_BLOCKS = [(5, 5), (5, 4), (6, 5), (6, 4)]
 
@@ -47,6 +47,7 @@ class Agent:
         self.x_bound = 11
         self.y_bound = 9
         self.enemy_id = -1
+        self.attack_enemy = False
 
     # def next_move(self, game_state, player_state):
     #     cProfile.runctx('self.next_move_alt(g, p)', {'g': game_state, 'p': player_state, 'self': self}, {}, 'out.pstat')
@@ -156,6 +157,12 @@ class Agent:
         current_block_count = len(self.game_state.soft_blocks)
         if len(self.game_state.ore_blocks) < 1:
             next_stage = self.END
+            score = self.player_state.reward
+            damage_taken = 3 - self.player_state.hp
+            if score < (50 + (damage_taken * 25)):
+                self.attack_enemy = True
+            else:
+                self.attack_enemy = False
         elif current_block_count == 0:
             next_stage = self.MIDDLE
         elif current_block_count != self.block_counter[0]:
@@ -199,7 +206,7 @@ class Agent:
                 self.bombs[tile] = self.bombs[location]
 
     def get_manhattan_distance(self, a, b):  # TODO: Make global
-        return abs(a[0] - b[0]) + abs(a[1] + b[1])
+        return abs(a[0] - b[0]) + abs(a[1] - b[1])
 
     def bomb_affect(self, loc):
         affected = []
@@ -228,11 +235,17 @@ class Agent:
 
     def in_bomb_radius(self, location, time_remaining=None):
         if location in self.bombs:
-            if time_remaining is None or self.tick_number - self.bombs[location] > 35 - time_remaining:
+            if (
+                time_remaining is None
+                or self.tick_number - self.bombs[location] > 35 - time_remaining
+            ):
                 return True
         for bomb in self.bombs.keys():
             if location in self.bomb_affect(bomb):
-                if time_remaining is None or self.tick_number - self.bombs[bomb] > 35 - time_remaining:
+                if (
+                    time_remaining is None
+                    or self.tick_number - self.bombs[bomb] > 35 - time_remaining
+                ):
                     return True
         return False
 
@@ -265,11 +278,7 @@ class Agent:
                     or (self.game_stage == self.OPENING and self.ores[location] == 1)
                 ):
                     points += 10 / self.ores[location]
-                elif (
-                    entity == self.enemy_id
-                    and self.game_stage == self.END
-                    and self.player_state.power < 50 + ((3 - self.player_state.hp) * 25)
-                ):
+                elif entity == self.enemy_id and self.attack_enemy:
                     points += 0.5
                 elif self.in_bomb_radius(location):
                     continue
@@ -355,7 +364,12 @@ class Agent:
             for coords in targets:
                 if current_location == coords:
                     return []
-                path = self.generate_path(current_location, coords, max_count=200)
+                distance = self.get_manhattan_distance(current_location, coords)
+                path = self.generate_path(
+                    current_location,
+                    coords,
+                    max_count=distance * self.PATHFINDER_ITERATION_MULTIPLIER,
+                )
                 if path is not None:
                     paths.append(path)
             if paths != []:
@@ -459,8 +473,11 @@ class Agent:
                     if node not in closed_list:
                         node.parent = current_node
                         node.g = current_node.g + 1
-                        node.h = ((node.position[0] - end_node.position[0]) ** 2) + (
-                            (node.position[1] - end_node.position[1]) ** 2
+                        node.h = (
+                            self.get_manhattan_distance(
+                                node.position, end_node.position
+                            )
+                            * self.PATHFINDER_HEURISTIC
                         )
                         node.f = node.g + node.h
                         for open_node in open_list:
