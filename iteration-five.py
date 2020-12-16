@@ -62,7 +62,6 @@ class Agent:
             self.on_first()
 
         if self.tick_number != game_state.tick_number:
-            print("Took too long to make move")
             self.synced = False
         else:
             self.synced = True
@@ -71,14 +70,11 @@ class Agent:
 
         if self.synced and self.player_location != player_state.location:
             last_move = self.move_history[-1]
-            print("Last move failed", last_move)
-            print("Expected vs actual", self.player_location, player_state.location)
             self.player_location = player_state.location
             self.path = []
             self.target = None
 
         if self.desync_count > self.MAX_DESYNC:
-            print("Resyncing")
             self.tick_number = game_state.tick_number + 1
             self.player_location = player_state.location
 
@@ -97,18 +93,10 @@ class Agent:
         else:
             self.desync_count += 1
             self.missed_turns += 1
-            print(
-                "missed {} out of {} turns ({:.2f}%)".format(
-                    self.missed_turns,
-                    self.tick_number,
-                    (self.missed_turns / self.tick_number) * 100,
-                )
-            )
             self.tick_number += 1
 
     def make_move(self, move):
         if not self.check_move_valid(self.player_location, move):
-            print("Invalid Move attempted:", move)
             self.path = []
             move = self.DO_NOTHING
         self.move_history.append(move)
@@ -166,7 +154,6 @@ class Agent:
         elif len(self.bombs) < 1 and self.block_counter[1] <= self.tick_number - 20:
             next_stage = self.MIDDLE
         if next_stage != self.game_stage:
-            print("Moving to new stage:", next_stage)
             self.game_stage = next_stage
 
     def track_bombs(self, bombs):
@@ -320,7 +307,6 @@ class Agent:
             action = self.RIGHT
         else:
             if current_location != destination:
-                print("Failed to move to tile (tiles provided are not neighbours)")
                 self.path = []
             action = self.DO_NOTHING
             if destination in self.path:
@@ -394,7 +380,6 @@ class Agent:
         else:
             target = self.path[-1]
             if self.in_bomb_radius(target, time_remaining=1):
-                print("Avoiding Bomb, Waiting one turn")
                 return self.DO_NOTHING
             if self.player_location not in self.get_surrounding_tiles(target):
                 for tile in self.get_surrounding_tiles(self.player_location):
@@ -408,7 +393,6 @@ class Agent:
             return next
 
     def avoid_bombs_and_traps(self):
-        print("Attempting to avoid bomb")
         for tile in self.get_surrounding_tiles(self.player_state.location):
             if self.is_moveable_to(tile):
                 for next_tile in self.get_surrounding_tiles(tile):
@@ -416,14 +400,7 @@ class Agent:
                         next_tile, time_remaining=2
                     ):
                         next = self.move_to_tile(self.player_state.location, tile)
-                        if next == self.DO_NOTHING:
-                            print(
-                                "Called by avoid bombs",
-                                self.player_state.location,
-                                tile,
-                            )
                         return next
-        print("Unable to escape bomb")
         return self.DO_NOTHING
 
     def generate_path(self, location, target, max_count=200):

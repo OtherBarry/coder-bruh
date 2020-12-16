@@ -1,6 +1,7 @@
 """File for primary agent"""
 import random
 
+
 class Agent:
     """Class for primary agent"""
 
