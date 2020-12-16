@@ -84,11 +84,8 @@ class Agent:
 
         if self.synced:
             self.desync_count = 0
-            if (
-                self.game_stage == self.END
-                and self.in_bomb_radius(self.player_location, time_remaining=10)
-            ) or self.in_bomb_radius(
-                self.player_location, time_remaining=self.MAX_DESYNC + 3
+            if self.in_bomb_radius(
+                self.player_location, time_remaining=2
             ):
                 next = self.avoid_bombs_and_traps()
                 return self.make_move(next)
@@ -187,8 +184,7 @@ class Agent:
         detonation_tick = self.tick_number - 35
         to_delete = []
         for location, tick in self.bombs.items():
-            if tick <= detonation_tick:
-                # self.on_bomb_detonate(location)
+            if tick < detonation_tick:
                 to_delete.append(location)
         for loc in to_delete:
             del self.bombs[loc]
@@ -234,18 +230,14 @@ class Agent:
         return affected
 
     def in_bomb_radius(self, location, time_remaining=None):
+        if time_remaining is not None:
+            detonation_tick = self.tick_number + time_remaining - 35
         if location in self.bombs:
-            if (
-                time_remaining is None
-                or self.tick_number - self.bombs[location] > 35 - time_remaining
-            ):
+            if time_remaining is None or self.bombs[location] <= detonation_tick:
                 return True
-        for bomb in self.bombs.keys():
+        for bomb in self.bombs:
             if location in self.bomb_affect(bomb):
-                if (
-                    time_remaining is None
-                    or self.tick_number - self.bombs[bomb] > 35 - time_remaining
-                ):
+                if time_remaining is None or self.bombs[bomb] <= detonation_tick:
                     return True
         return False
 
@@ -400,15 +392,11 @@ class Agent:
             ):
                 return self.BOMB
             else:
-                if self.in_bomb_radius(self.player_location):
-                    return self.avoid_bombs_and_traps()
                 return self.DO_NOTHING
         else:
             target = self.path[-1]
             if self.in_bomb_radius(
-                target, time_remaining=self.MAX_DESYNC + 1
-            ) and not self.in_bomb_radius(
-                self.player_location, time_remaining=self.MAX_DESYNC
+                target, time_remaining=1
             ):
                 print("Avoiding Bomb, Waiting one turn")
                 return self.DO_NOTHING
@@ -424,11 +412,12 @@ class Agent:
             return next
 
     def avoid_bombs_and_traps(self):
+        print("Attempting to avoid bomb")
         for tile in self.get_surrounding_tiles(self.player_state.location):
             if self.is_moveable_to(tile):
                 for next_tile in self.get_surrounding_tiles(tile):
                     if self.is_moveable_to(next_tile) and not self.in_bomb_radius(
-                        next_tile, time_remaining=(self.MAX_DESYNC * 2) + 1
+                        next_tile, time_remaining=2
                     ):
                         next = self.move_to_tile(self.player_state.location, tile)
                         if next == self.DO_NOTHING:
