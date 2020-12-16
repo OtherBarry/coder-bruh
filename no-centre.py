@@ -273,21 +273,6 @@ class Agent:
                     self.MIN_AMMO_WEIGHTING,
                 )
 
-        if (
-            points == 0
-            and self.game_stage == self.END
-            and not self.attack_enemy
-            and self.player_state.ammo > 0
-        ):
-            cells = self.get_surrounding_tiles(loc)
-            safe = True
-            for cell in cells:
-                if self.game_state.entity_at(cell) is not None:
-                    safe = False
-            if safe:
-                points += 10
-                return points
-
         if self.player_state.ammo > 0:
             affected = self.bomb_affect(loc)
             for location in affected:
@@ -385,12 +370,7 @@ class Agent:
         for value in values:
             targets = worth_attempting[value]
             paths = []
-            if (
-                self.target in targets
-                and self.path
-                and self.path[-1] in self.get_surrounding_tiles(self.player_location)
-                and self.is_moveable_to(self.path[-1], skip_enemy=False)
-            ):
+            if self.target in targets:
                 return self.path
             for coords in targets:
                 if current_location == coords:
@@ -407,9 +387,7 @@ class Agent:
                     paths.append(path)
             if paths != []:
                 return min(paths, key=len)
-        if self.player_state.ammo > 0:
-            return []
-        return self.get_path_to_centre()
+        return []
 
     def get_path_to_centre(self):
         current_location = self.player_state.location
@@ -515,27 +493,41 @@ class Agent:
             path_to_escape = self.generate_path(
                 self.player_location, exit, skip_enemy=False
             )
+            print(path_to_escape)
+            print(path_to_opponent)
             if len(path_to_opponent) <= len(path_to_escape):
                 return self.move_to_tile(self.player_location, path_to_escape.pop())
         else:
-            if (
-                not self.is_safe(self.player_location, self.tick_number + 3)
-                or not self.is_safe(self.player_location, self.tick_number + 2)
-                or not self.is_safe(self.player_location, self.tick_number + 1)
+            # if not self.is_safe(self.player_location, self.tick_number + 3)
+            #
+            #
+            # if not self.is_safe(self.player_location, self.tick_number + 1):
+            #
+            #
+
+            if not self.is_safe(
+                self.player_location,
+                self.tick_number + 2,
+                late_game=self.game_stage == self.END,
             ):
-                neighbours = self.get_surrounding_tiles(self.player_location)
-                for tile in neighbours:
-                    if self.is_moveable_to(tile) and self.is_safe(
-                        tile, self.tick_number + 2
-                    ):
-                        return self.move_to_tile(self.player_location, tile)
-                for tile in neighbours:
-                    secondary_tiles = self.get_surrounding_tiles(tile)
-                    for t2 in secondary_tiles:
-                        if self.is_moveable_to(t2) and self.is_safe(
-                            t2, self.tick_number + 3
-                        ):
-                            return self.move_to_tile(self.player_location, tile)
+                for tile in self.get_surrounding_tiles(self.player_state.location):
+                    if self.is_moveable_to(tile):
+                        for next_tile in self.get_surrounding_tiles(tile):
+                            if self.is_moveable_to(next_tile) and self.is_safe(
+                                next_tile,
+                                self.tick_number + 2,
+                                late_game=self.game_stage == self.END,
+                            ):
+                                next = self.move_to_tile(
+                                    self.player_state.location, tile
+                                )
+                                if next == self.DO_NOTHING:
+                                    print(
+                                        "Called by avoid bombs",
+                                        self.player_state.location,
+                                        tile,
+                                    )
+                                return next
                 print("Unable to escape bomb")
             return None
 

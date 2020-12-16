@@ -1,9 +1,6 @@
 """File for primary agent"""
 import random
 
-from coderone.dungeon.agent import PlayerState, GameState
-import cProfile
-
 
 class Agent:
     """Class for primary agent"""
@@ -50,11 +47,7 @@ class Agent:
         self.attack_enemy = False
         self.bomb_map = {}
 
-    # def next_move(self, game_state, player_state):
-    #     cProfile.runctx('self.next_move_alt(g, p)', {'g': game_state, 'p': player_state, 'self': self}, {}, 'out.pstat')
-    #     quit()
-
-    def next_move(self, game_state: GameState, player_state: PlayerState):
+    def next_move(self, game_state, player_state):
         """This method is called each time the player needs to choose an action"""
         self.game_state = game_state
         self.player_state = player_state
@@ -63,7 +56,6 @@ class Agent:
             self.on_first()
 
         if self.tick_number != game_state.tick_number:
-            print("Took too long to make move")
             self.synced = False
         else:
             self.synced = True
@@ -73,14 +65,11 @@ class Agent:
 
         if self.synced and self.player_location != player_state.location:
             last_move = self.move_history[-1]
-            print("Last move failed", last_move)
-            print("Expected vs actual", self.player_location, player_state.location)
             self.player_location = player_state.location
             self.path = []
             self.target = None
 
         if self.desync_count > self.MAX_DESYNC:
-            print("Resyncing")
             self.tick_number = game_state.tick_number + 1
             self.player_location = player_state.location
 
@@ -99,18 +88,10 @@ class Agent:
         else:
             self.desync_count += 1
             self.missed_turns += 1
-            print(
-                "missed {} out of {} turns ({:.2f}%)".format(
-                    self.missed_turns,
-                    self.tick_number,
-                    (self.missed_turns / self.tick_number) * 100,
-                )
-            )
             self.tick_number += 1
 
     def make_move(self, move):
         if not self.check_move_valid(self.player_location, move):
-            print("Invalid Move attempted:", move)
             self.path = []
             move = self.DO_NOTHING
         self.move_history.append(move)
@@ -172,7 +153,6 @@ class Agent:
         elif len(self.bombs) < 1 and self.block_counter[1] <= self.tick_number - 20:
             next_stage = self.MIDDLE
         if next_stage != self.game_stage:
-            print("Moving to new stage:", next_stage)
             self.game_stage = next_stage
 
     def track_bombs(self, bombs):
@@ -275,6 +255,7 @@ class Agent:
 
         if (
             points == 0
+            and loc != self.player_location
             and self.game_stage == self.END
             and not self.attack_enemy
             and self.player_state.ammo > 0
@@ -282,11 +263,13 @@ class Agent:
             cells = self.get_surrounding_tiles(loc)
             safe = True
             for cell in cells:
-                if self.game_state.entity_at(cell) is not None:
+                if (
+                    self.game_state.is_in_bounds(cell)
+                    and self.game_state.entity_at(cell) is None
+                ):
                     safe = False
             if safe:
-                points += 10
-                return points
+                return 10
 
         if self.player_state.ammo > 0:
             affected = self.bomb_affect(loc)
@@ -356,7 +339,6 @@ class Agent:
             action = self.RIGHT
         else:
             if current_location != destination:
-                print("Failed to move to tile (tiles provided are not neighbours)")
                 self.path = []
             action = self.DO_NOTHING
             if destination in self.path:
@@ -439,15 +421,12 @@ class Agent:
         else:
             target = self.path[-1]
             if not self.is_safe(target, self.tick_number + 1):
-                print("Avoiding Bomb, Waiting one turn")
                 return self.DO_NOTHING
             if self.game_state.entity_at(self.player_location) == self.BOMB:
                 trap, exit = self.get_trap_details(target)
                 if trap is not None and exit is None:
-                    print("Avoiding Trap, Waiting one turn")
                     return self.DO_NOTHING
             if self.player_location not in self.get_surrounding_tiles(target):
-                print("PATHING ERROR")
                 for tile in self.get_surrounding_tiles(self.player_location):
                     if self.is_moveable_to(
                         tile
@@ -536,7 +515,6 @@ class Agent:
                             t2, self.tick_number + 3
                         ):
                             return self.move_to_tile(self.player_location, tile)
-                print("Unable to escape bomb")
             return None
 
     def generate_path(self, location, target, max_count=200, skip_enemy=True):

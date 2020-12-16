@@ -340,8 +340,12 @@ class Agent:
                 if self.is_moveable_to(coords):
                     value = self.bombing_value(coords)
                     if value > 0.0:
-                        distance = self.get_manhattan_distance(self.player_location, coords)
-                        estimated_path_length = round(0.1689365 + (1.1509356 * distance))
+                        distance = self.get_manhattan_distance(
+                            self.player_location, coords
+                        )
+                        estimated_path_length = round(
+                            0.1689365 + (1.1509356 * distance)
+                        )
                         weighted_value = value - estimated_path_length / ammo_weight
                         worth_attempting.append((coords, distance, weighted_value))
         worth_attempting.sort(key=lambda x: x[2], reverse=True)
