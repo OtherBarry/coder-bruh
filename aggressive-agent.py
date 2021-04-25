@@ -47,8 +47,7 @@ class Agent:
         self.x_bound = 11
         self.y_bound = 9
         self.enemy_id = -1
-        self.attack_enemy = False
-        self.bomb_map = {}
+        self.attack_enemy = True
 
     # def next_move(self, game_state, player_state):
     #     cProfile.runctx('self.next_move_alt(g, p)', {'g': game_state, 'p': player_state, 'self': self}, {}, 'out.pstat')
@@ -63,32 +62,27 @@ class Agent:
             self.on_first()
 
         if self.tick_number != game_state.tick_number:
-            print("Took too long to make move")
             self.synced = False
         else:
             self.synced = True
 
         self.track_bombs(game_state.bombs)
-        self.create_bomb_map()
 
         if self.synced and self.player_location != player_state.location:
             last_move = self.move_history[-1]
-            print("Last move failed", last_move)
-            print("Expected vs actual", self.player_location, player_state.location)
             self.player_location = player_state.location
             self.path = []
             self.target = None
 
         if self.desync_count > self.MAX_DESYNC:
-            print("Resyncing")
             self.tick_number = game_state.tick_number + 1
             self.player_location = player_state.location
 
         if self.synced:
             self.desync_count = 0
-            to_avoid = self.avoid_bombs_and_traps()
-            if to_avoid is not None:
-                return self.make_move(to_avoid)
+            if self.in_bomb_radius(self.player_location, time_remaining=2):
+                next = self.avoid_bombs_and_traps()
+                return self.make_move(next)
             self.update_game_stage()
             worth_attempting = self.get_locations_worth_attempting()
             self.path = self.get_path_to_best(worth_attempting)
@@ -99,18 +93,10 @@ class Agent:
         else:
             self.desync_count += 1
             self.missed_turns += 1
-            print(
-                "missed {} out of {} turns ({:.2f}%)".format(
-                    self.missed_turns,
-                    self.tick_number,
-                    (self.missed_turns / self.tick_number) * 100,
-                )
-            )
             self.tick_number += 1
 
     def make_move(self, move):
         if not self.check_move_valid(self.player_location, move):
-            print("Invalid Move attempted:", move)
             self.path = []
             move = self.DO_NOTHING
         self.move_history.append(move)
@@ -137,12 +123,10 @@ class Agent:
         self.tick_number += 1
         return move
 
-    def is_moveable_to(self, location, skip_enemy=False):
+    def is_moveable_to(self, location):
         if self.game_state.is_in_bounds(location):
             entity = self.game_state.entity_at(location)
-            return entity not in self.IMPENETRABLE_OBJECTS and (
-                skip_enemy or entity != self.enemy_id
-            )
+            return entity not in self.IMPENETRABLE_OBJECTS and entity != self.enemy_id
         return False
 
     def on_first(self):
@@ -158,12 +142,6 @@ class Agent:
             next_stage = self.END
             score = self.player_state.reward
             damage_taken = 3 - self.player_state.hp
-            if score < (
-                56 + (damage_taken * 25)
-            ):  # Max points obtainable by other player
-                self.attack_enemy = True
-            else:
-                self.attack_enemy = False
         elif current_block_count == 0:
             next_stage = self.MIDDLE
         elif current_block_count != self.block_counter[0]:
@@ -172,7 +150,6 @@ class Agent:
         elif len(self.bombs) < 1 and self.block_counter[1] <= self.tick_number - 20:
             next_stage = self.MIDDLE
         if next_stage != self.game_stage:
-            print("Moving to new stage:", next_stage)
             self.game_stage = next_stage
 
     def track_bombs(self, bombs):
@@ -203,34 +180,7 @@ class Agent:
                     if (location[0] + diff[0], location[1] + diff[1]) in self.bombs:
                         self.ores[tile] += 1
             elif tile in self.bombs:
-                self.bombs[location] = self.bombs[tile] + 1
-
-    def create_bomb_map(self):
-        bomb_map = {}
-        for bomb in self.bombs:
-            if bomb not in bomb_map or bomb_map[bomb] > self.bombs[bomb] + 35:
-                bomb_map[bomb] = self.bombs[bomb] + 35
-            for tile in self.bomb_affect(bomb):
-                if tile not in bomb_map or bomb_map[tile] > self.bombs[bomb] + 35:
-                    bomb_map[tile] = self.bombs[bomb] + 35
-        self.bomb_map = bomb_map
-
-    def is_safe(self, location, tick, late_game=False):
-        if location not in self.bomb_map:
-            return True
-        det_tick = self.bomb_map[location]
-        if late_game:
-            if det_tick < tick + 5:
-                return False
-        elif det_tick == tick or det_tick == tick + 1:
-            return False
-        return True
-
-    def is_trap(self, location, skip_cells=()):
-        for tile in self.get_surrounding_tiles(location):
-            if tile not in skip_cells and self.is_moveable_to(tile):
-                return False
-        return True
+                self.bombs[tile] = self.bombs[location]
 
     def get_manhattan_distance(self, a, b):  # TODO: Make global
         return abs(a[0] - b[0]) + abs(a[1] - b[1])
@@ -260,6 +210,18 @@ class Agent:
                         break
         return affected
 
+    def in_bomb_radius(self, location, time_remaining=None):
+        if time_remaining is not None:
+            detonation_tick = self.tick_number + time_remaining - 35
+        if location in self.bombs:
+            if time_remaining is None or self.bombs[location] <= detonation_tick:
+                return True
+        for bomb in self.bombs:
+            if location in self.bomb_affect(bomb):
+                if time_remaining is None or self.bombs[bomb] <= detonation_tick:
+                    return True
+        return False
+
     def bombing_value(self, loc, inculde_pickups=True):
         points = 0
 
@@ -272,21 +234,6 @@ class Agent:
                     self.MAX_AMMO_WEIGHTING[self.game_stage] - self.player_state.ammo,
                     self.MIN_AMMO_WEIGHTING,
                 )
-
-        if (
-            points == 0
-            and self.game_stage == self.END
-            and not self.attack_enemy
-            and self.player_state.ammo > 0
-        ):
-            cells = self.get_surrounding_tiles(loc)
-            safe = True
-            for cell in cells:
-                if self.game_state.entity_at(cell) is not None:
-                    safe = False
-            if safe:
-                points += 10
-                return points
 
         if self.player_state.ammo > 0:
             affected = self.bomb_affect(loc)
@@ -305,8 +252,8 @@ class Agent:
                 ):
                     points += 10 / self.ores[location]
                 elif entity == self.enemy_id and self.attack_enemy:
-                    points += 0.5
-                elif location in self.bomb_map:
+                    points += 5
+                elif self.in_bomb_radius(location):
                     continue
                 elif entity == "sb":
                     points += 2
@@ -333,14 +280,14 @@ class Agent:
     def get_surrounding_tiles(self, location):
         """Gets a list of surrounding tiles from up, down, left right"""
         surrounding_tiles = []
-        if location[1] != self.y_bound:  # UP
-            surrounding_tiles.append((location[0], location[1] + 1))
-        if location[0] != self.x_bound:  # RIGHT
-            surrounding_tiles.append((location[0] + 1, location[1]))
-        if location[1] != 0:  # DOWN
-            surrounding_tiles.append((location[0], location[1] - 1))
-        if location[0] != 0:  # LEFT
+        if location[0] != 0:
             surrounding_tiles.append((location[0] - 1, location[1]))
+        if location[0] != self.x_bound:
+            surrounding_tiles.append((location[0] + 1, location[1]))
+        if location[1] != 0:
+            surrounding_tiles.append((location[0], location[1] - 1))
+        if location[1] != self.y_bound:
+            surrounding_tiles.append((location[0], location[1] + 1))
         return surrounding_tiles
 
     def move_to_tile(self, current_location, destination):
@@ -356,7 +303,6 @@ class Agent:
             action = self.RIGHT
         else:
             if current_location != destination:
-                print("Failed to move to tile (tiles provided are not neighbours)")
                 self.path = []
             action = self.DO_NOTHING
             if destination in self.path:
@@ -385,18 +331,11 @@ class Agent:
         for value in values:
             targets = worth_attempting[value]
             paths = []
-            if (
-                self.target in targets
-                and self.path
-                and self.path[-1] in self.get_surrounding_tiles(self.player_location)
-                and self.is_moveable_to(self.path[-1], skip_enemy=False)
-            ):
+            if self.target in targets:
                 return self.path
             for coords in targets:
                 if current_location == coords:
                     return []
-                if self.is_trap(coords):
-                    continue
                 distance = self.get_manhattan_distance(current_location, coords)
                 path = self.generate_path(
                     current_location,
@@ -407,8 +346,6 @@ class Agent:
                     paths.append(path)
             if paths != []:
                 return min(paths, key=len)
-        if self.player_state.ammo > 0:
-            return []
         return self.get_path_to_centre()
 
     def get_path_to_centre(self):
@@ -438,108 +375,31 @@ class Agent:
                 return self.DO_NOTHING
         else:
             target = self.path[-1]
-            if not self.is_safe(target, self.tick_number + 1):
-                print("Avoiding Bomb, Waiting one turn")
+            if self.in_bomb_radius(target, time_remaining=1):
                 return self.DO_NOTHING
-            if self.game_state.entity_at(self.player_location) == self.BOMB:
-                trap, exit = self.get_trap_details(target)
-                if trap is not None and exit is None:
-                    print("Avoiding Trap, Waiting one turn")
-                    return self.DO_NOTHING
             if self.player_location not in self.get_surrounding_tiles(target):
-                print("PATHING ERROR")
                 for tile in self.get_surrounding_tiles(self.player_location):
                     if self.is_moveable_to(
                         tile
                     ) and target in self.get_surrounding_tiles(tile):
                         target = tile
-                    else:
-                        self.path = []
-                        self.target = None
-                        target = self.player_location
-            if self.path and target == self.path[-1]:
+            if target == self.path[-1]:
                 self.path.pop()
             next = self.move_to_tile(self.player_location, target)
             return next
 
-    def get_trap_details(self, location):
-        starting_tiles = [
-            tile
-            for tile in self.get_surrounding_tiles(location)
-            if self.is_moveable_to(tile, skip_enemy=False)
-        ]
-        move_count = len(starting_tiles)
-        if move_count > 2:
-            return None, None
-        if move_count == 0:
-            return location, None
-        exit = None
-        trap = None
-        open_tiles = starting_tiles
-        closed_tiles = {self.player_location}
-        while len(open_tiles) > 0:
-            current_tile = open_tiles.pop()
-            closed_tiles.add(current_tile)
-            neighbours = [
-                tile
-                for tile in self.get_surrounding_tiles(current_tile)
-                if tile not in closed_tiles
-                and self.is_moveable_to(tile, skip_enemy=False)
-            ]
-            n_count = len(neighbours)
-            if n_count == 0:  # Trap
-                if trap is None:
-                    trap = current_tile
-                else:
-                    return trap, None
-            elif n_count > 1:  # exit
-                if exit is None:
-                    exit = current_tile
-                else:
-                    return trap, None
-            else:
-                open_tiles.extend(neighbours)
-        return trap, exit
-
     def avoid_bombs_and_traps(self):
-        if self.player_location not in self.bomb_map:
-            _, exit = self.get_trap_details(self.player_location)
-            if exit is None:
-                return None
-            opponent = self.game_state.opponents(self.player_state.id)[0]
-            path_to_opponent = self.generate_path(
-                self.player_location, opponent, skip_enemy=True
-            )
-            if path_to_opponent is None:
-                return None
-            path_to_escape = self.generate_path(
-                self.player_location, exit, skip_enemy=False
-            )
-            if len(path_to_opponent) <= len(path_to_escape):
-                return self.move_to_tile(self.player_location, path_to_escape.pop())
-        else:
-            if (
-                not self.is_safe(self.player_location, self.tick_number + 3)
-                or not self.is_safe(self.player_location, self.tick_number + 2)
-                or not self.is_safe(self.player_location, self.tick_number + 1)
-            ):
-                neighbours = self.get_surrounding_tiles(self.player_location)
-                for tile in neighbours:
-                    if self.is_moveable_to(tile) and self.is_safe(
-                        tile, self.tick_number + 2
+        for tile in self.get_surrounding_tiles(self.player_state.location):
+            if self.is_moveable_to(tile):
+                for next_tile in self.get_surrounding_tiles(tile):
+                    if self.is_moveable_to(next_tile) and not self.in_bomb_radius(
+                        next_tile, time_remaining=2
                     ):
-                        return self.move_to_tile(self.player_location, tile)
-                for tile in neighbours:
-                    secondary_tiles = self.get_surrounding_tiles(tile)
-                    for t2 in secondary_tiles:
-                        if self.is_moveable_to(t2) and self.is_safe(
-                            t2, self.tick_number + 3
-                        ):
-                            return self.move_to_tile(self.player_location, tile)
-                print("Unable to escape bomb")
-            return None
+                        next = self.move_to_tile(self.player_state.location, tile)
+                        return next
+        return self.DO_NOTHING
 
-    def generate_path(self, location, target, max_count=200, skip_enemy=True):
+    def generate_path(self, location, target, max_count=200):
         start_node = Node(None, location)
         start_node.g = start_node.h = start_node.f = 0
         end_node = Node(None, target)
@@ -566,7 +426,7 @@ class Agent:
             tiles = self.get_surrounding_tiles(current_node.position)
             random.shuffle(tiles)
             for tile in tiles:
-                if self.is_moveable_to(tile, skip_enemy=skip_enemy):
+                if self.is_moveable_to(tile):
                     node = Node(None, tile)
                     if node not in closed_list:
                         node.parent = current_node
@@ -578,6 +438,9 @@ class Agent:
                             * self.PATHFINDER_HEURISTIC
                         )
                         node.f = node.g + node.h
+                        for open_node in open_list:
+                            if node == open_node and node.g > open_node.g:
+                                continue
                         open_list.append(node)
         return None
 
