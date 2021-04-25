@@ -35,8 +35,8 @@ class Agent:
         empty_tiles = get_empty_tiles(valid_tiles)
         return move_to_tile(
             random.choice(empty_tiles)
-        )   # this should now check for valid empty tiles and move to one at random
-            # return random.choice([self.UP, self.DOWN, self.LEFT, self.RIGHT])
+        )  # this should now check for valid empty tiles and move to one at random
+        # return random.choice([self.UP, self.DOWN, self.LEFT, self.RIGHT])
 
     def on_first(self):
         self.first = False
